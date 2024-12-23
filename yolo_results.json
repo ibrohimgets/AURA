@@ -1,0 +1,42 @@
+[
+  {
+    "label": "toilet",
+    "confidence": 0.5206793546676636,
+    "bounding_box": {
+      "x": 203,
+      "y": 512,
+      "width": 277,
+      "height": 127
+    }
+  },
+  {
+    "label": "toilet",
+    "confidence": 0.43635323643684387,
+    "bounding_box": {
+      "x": 32,
+      "y": 220,
+      "width": 226,
+      "height": 417
+    }
+  },
+  {
+    "label": "refrigerator",
+    "confidence": 0.4141484797000885,
+    "bounding_box": {
+      "x": 202,
+      "y": 513,
+      "width": 277,
+      "height": 126
+    }
+  },
+  {
+    "label": "toilet",
+    "confidence": 0.25083017349243164,
+    "bounding_box": {
+      "x": 33,
+      "y": 382,
+      "width": 227,
+      "height": 256
+    }
+  }
+]
