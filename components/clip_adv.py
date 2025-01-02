@@ -1,73 +1,110 @@
-from transformers import CLIPProcessor, CLIPModel, GPT2LMHeadModel, GPT2Tokenizer
+import os
+import openai
+from dotenv import load_dotenv
+from transformers import BlipProcessor, BlipForConditionalGeneration
 from PIL import Image
-import torch
 
-if __name__ == "__main__":
-    # Clip model here
-    clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+# Load environment variables
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
-    # Load GPT-2 model and tokenizer
-    gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
-    gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+# Load OpenAI API Key
+openai.api_key = os.getenv("OPENAI_API_KEY")
+if not openai.api_key:
+    raise ValueError("❌ OpenAI API key not found! Please set it in your .env file.")
 
-    # Set GPT-2 to evaluation mode
-    gpt2_model.eval()
+# -----------------------------
+# Step 1: Generate Captions with BLIP
+# -----------------------------
+def generate_captions(image_paths):
+    """
+    Generate image captions using BLIP.
+    """
+    print("📸 Generating Image Captions using BLIP...")
+    blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+    blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base", use_fast=True)
+    
+    captions = []
+    for img_path in image_paths:
+        image = Image.open(img_path).convert("RGB")
+        inputs = blip_processor(images=image, return_tensors="pt")
+        outputs = blip_model.generate(**inputs)
+        caption = blip_processor.decode(outputs[0], skip_special_tokens=True)
+        captions.append(caption)
+        print(f"📝 Caption for {img_path}: {caption}")
+    return captions
 
-    # Load your image
-    image_path = r"C:\Users\User\Desktop\do2\cat.jpg"
-    image = Image.open(image_path).convert("RGB")
+# -----------------------------
+# Step 2: Match Captions with GPT
+# -----------------------------
+def match_with_gpt(user_input, captions):
+    """
+    Match user input with captions using GPT.
+    """
+    print("\n🤖 Matching with GPT...")
+    
+    # Build the GPT Prompt
+    prompt = f"""
+You are an AI assistant tasked with matching a user's text prompt to the most relevant image caption.
 
-    # Contextual Text Descriptions
-    descriptions = [
-        "A car",
-        "A ripe yellow banana",
-        "A cute cat sitting on a chair",
-        "A playful dog",
-        "An unknown object"
-    ]
+User Prompt: "{user_input}"
 
-    # Process the image and text with CLIP
-    clip_inputs = clip_processor(
-        text=descriptions,
-        images=image,
-        return_tensors="pt",
-        padding=True,
-        truncation=True
-    )
+Image Captions:
+{chr(10).join([f"{i+1}. {caption}" for i, caption in enumerate(captions)])}
 
-    # Get CLIP predictions
-    outputs = clip_model(**clip_inputs)
-    logits_per_image = outputs.logits_per_image
-    probs = logits_per_image.softmax(dim=1)
+Which caption best matches the user's prompt? Please return the number of the best-matching caption and explain your choice.
+"""
 
-    # Confidence Threshold
-    confidence_threshold = 0.6
-
-    # Find the best match and its confidence
-    best_idx = probs.argmax().item()
-    best_confidence = probs[0][best_idx].item()
-    best_description = descriptions[best_idx]
-
-    if best_confidence < confidence_threshold or best_description == "An unknown object":
-        print("🤔 I don't think there's a proper object that matches your description.")
-    else:
-        print(f"🖼️ Best Match (CLIP): {best_description} (Confidence: {best_confidence:.2f})")
-
-        # Pass the description to GPT-2 for refinement
-        gpt2_input_text = f"The image shows {best_description}. It seems to be"
-        gpt2_inputs = gpt2_tokenizer.encode(gpt2_input_text, return_tensors="pt")
-
-        gpt2_output = gpt2_model.generate(
-            gpt2_inputs,
-            max_length=50,
-            num_return_sequences=1,
-            pad_token_id=gpt2_tokenizer.eos_token_id,
-            do_sample=True,
-            top_k=50,
-            top_p=0.95
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # You can use 'gpt-3.5-turbo' if GPT-4 is unavailable
+            messages=[
+                {"role": "system", "content": "You are an assistant specialized in semantic reasoning."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=150,
+            temperature=0.2
         )
 
-        # Decode and print GPT-2 response
-        gpt2_response = gpt2_tokenizer.decode(gpt2_output[0], skip_special_tokens=True)
-        print(f"🤖 Refined Description (GPT-2): {gpt2_response}")
+        # Parse GPT response
+        reply = response['choices'][0]['message']['content']
+        print("\n💬 GPT Response:", reply)
+        
+        # Extract the matching caption index
+        import re
+        match = re.search(r'(\d+)', reply)
+        if match:
+            best_idx = int(match.group(1)) - 1
+            return best_idx
+        else:
+            print("🤔 GPT did not return a valid caption number.")
+            return None
+
+    except openai.OpenAIError as e:
+        print(f"❌ OpenAI API Error: {e}")
+        return None
+
+# -----------------------------
+# Step 3: Main Program
+# -----------------------------
+if __name__ == '__main__':
+    # Define image paths
+    image_paths = [
+        "D:/OneDrive/Desktop/do2/KakaoTalk_20241230_172527757.jpg",
+        "D:/OneDrive/Desktop/do2/ㅣ뮤.jpg"
+    ]
+    
+    # Generate captions using BLIP
+    captions = generate_captions(image_paths)
+    
+    # User Input
+    user_input = input("\n📝 Please type a description or prompt for the images: ")
+    
+    # Match captions using GPT
+    best_match_idx = match_with_gpt(user_input, captions)
+    if best_match_idx is not None and 0 <= best_match_idx < len(captions):
+        print(f"\n✅ Best Match Found:")
+        print(f" - Caption: {captions[best_match_idx]}")
+        print(f" - Image: {image_paths[best_match_idx]}")
+    else:
+        print("\n❌ No valid match was returned by GPT.")

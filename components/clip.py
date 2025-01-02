@@ -14,7 +14,7 @@ if __name__ == "__main__":
     # ✅ Load Images
     pics = [
         r"C:\Users\User\Desktop\do2\banana.jpg",
-        r"C:\Users\User\Desktop\do2\Artboard1_5f868df7-e28d-4e43-a42d-62be1fdb81b7.webp"
+        r"C:\Users\User\Desktop\do2\cat.jpg"
     ]
     images = [Image.open(img_path).convert("RGB") for img_path in pics]
 
